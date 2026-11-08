@@ -20,5 +20,4 @@ __pycache__/
 /TESTING.md
 /requirements-dev.txt
 /requirements-lock.txt
-/DATASETS.md
 /tests/
