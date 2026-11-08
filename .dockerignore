@@ -1,0 +1,14 @@
+*
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!main.py
+!model/
+model/*
+!model/*.py
+!utils/
+utils/*
+!utils/*.py
+!weights/
+weights/*
+!weights/model.keras

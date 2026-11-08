@@ -1,7 +1,11 @@
-"""Константы ТЗ: длины в метрах, фаза в радианах."""
+"""Пути проекта и константы ТЗ в метрах и радианах."""
 
 from math import pi as PI
+from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATASET_DIRECTORY = PROJECT_ROOT / "dataset"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "output" / "model.keras"
 
 # Формат входных изображений, фазового ДОЭ и реконструкций.
 INPUT_IMAGE_COUNT = 4
@@ -11,6 +15,11 @@ IMAGE_FORMAT = "PNG"
 IMAGE_MODE = "L"
 IMAGE_BIT_DEPTH = 8
 MAX_PIXEL_VALUE = 2**IMAGE_BIT_DEPTH - 1
+
+# Константы SSIM для шкалы яркости [0, 255]: 6.5025 и 58.5225.
+SSIM_C1 = (0.01 * MAX_PIXEL_VALUE) ** 2
+SSIM_C2 = (0.03 * MAX_PIXEL_VALUE) ** 2
+
 PHASE_MIN_RAD = -PI
 PHASE_MAX_RAD = PI
 

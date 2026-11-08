@@ -1,4 +1,8 @@
 .venv/
+.venv-tf/
+.tools-tf/
+.ruff_cache/
+runs/
 venv/
 __pycache__/
 *.py[cod]
@@ -7,3 +11,14 @@ __pycache__/
 .env
 .env.*
 !.env.example
+/diagnostics/
+/tests/*
+!/tests/test_inference.py
+!/tests/generate_demo_inputs.py
+/checkpoints/
+/output/
+/TESTING.md
+/requirements-dev.txt
+/requirements-lock.txt
+/DATASETS.md
+/tests/

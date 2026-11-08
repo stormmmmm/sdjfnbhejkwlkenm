@@ -1,3 +1,6 @@
+"""Обработать комплекты в подпапках input/ и сохранить результаты в output/."""
 
-if __name__ == '__main__':
-    ...
+from utils.inference import main
+
+if __name__ == "__main__":
+    main()

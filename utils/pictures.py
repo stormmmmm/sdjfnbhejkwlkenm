@@ -1,10 +1,11 @@
+from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
-from const import (
+from utils.const import (
     IMAGE_FORMAT,
     IMAGE_MODE,
     IMAGE_SHAPE,
@@ -13,52 +14,78 @@ from const import (
 )
 
 
+def load_grayscale_png(path: Path, *, contents: bytes | None = None) -> NDArray[np.uint8]:
+    """Декодировать PNG из файла или уже прочитанных байтов без изменения пикселей."""
+    if contents is None and not path.is_file():
+        raise FileNotFoundError(f"Не найдено изображение: {path}")
+    try:
+        with Image.open(path if contents is None else BytesIO(contents)) as image:
+            if (
+                image.format != IMAGE_FORMAT
+                or image.size != IMAGE_SHAPE
+                or image.mode != IMAGE_MODE
+            ):
+                raise ValueError(f"Изображение {path} должно быть grayscale PNG (L), 128×128.")
+            return np.array(image, dtype=np.uint8)
+    except OSError as error:
+        raise ValueError(f"Не удалось прочитать изображение {path}.") from error
+
+
+def normalize_pixels(pixels: NDArray[np.uint8]) -> NDArray[np.float32]:
+    """Перевести пиксели uint8 в float32 [0, 1], сохраняя форму."""
+    return pixels.astype(np.float32) / np.float32(MAX_PIXEL_VALUE)
+
+
+def save_phase(path: str | Path, phase_map: NDArray[np.floating]) -> None:
+    """Сохранить вещественную фазу 128×128: −π → 0, +π → 255.
+
+    Фаза задаётся в радианах; округлённая кодировка ограничивается [0,255].
+    Нечисловые, комплексные, логические и неконечные данные отвергаются.
+    """
+    phase_map = np.asarray(phase_map)
+    if phase_map.dtype.kind not in "fiu":
+        raise ValueError("Фаза должна содержать вещественные числа в радианах.")
+    phase_map = phase_map.astype(np.float64)
+    if phase_map.shape != IMAGE_SHAPE or not np.isfinite(phase_map).all():
+        raise ValueError("Фаза должна быть конечным массивом формы (128, 128).")
+    pixels = np.clip(
+        np.rint(MAX_PIXEL_VALUE * (phase_map + np.pi) / (2 * np.pi)),
+        0,
+        MAX_PIXEL_VALUE,
+    ).astype(np.uint8)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(pixels).save(path, format=IMAGE_FORMAT)
+
+
+def load_phase(path: str | Path) -> NDArray[np.float64]:
+    """Декодировать сохранённый 8-битный ДОЭ 128×128 в фазу [−π, π]."""
+    pixels = load_grayscale_png(Path(path))
+    return pixels.astype(np.float64) / MAX_PIXEL_VALUE * (2 * np.pi) - np.pi
+
+
 class InputPictures:
-    """Четыре входных изображения в порядке сортировки имён файлов.
+    """Четыре входных изображения с именами 1.png, 2.png, 3.png, 4.png.
 
     Порядок соответствует плоскостям 24,1 / 25,3 / 26,5 / 27,7 мм.
     Исходные пиксели хранятся как uint8 без изменения размера и каналов.
     """
 
-    def __init__(self, path_input: str | Path = Path("input")) -> None:
+    def __init__(self, path_input: str | Path = Path("../input")) -> None:
         self.path_input = Path(path_input)
         self.images: list[NDArray[np.uint8]] = []
 
     def load(self) -> None:
-        """Загрузить все файлы папки: ровно четыре grayscale PNG 128×128.
+        """Загрузить 1.png–4.png: grayscale PNG 128×128.
 
-        TypeError: число файлов не равно четырём (учитываются все форматы).
+        Дополнительные файлы и папки игнорируются.
         ValueError: файл не читается или не соответствует формату из ТЗ.
         Ошибка загрузки сохраняет ранее загруженные изображения.
         """
-        files = sorted(
-            (path for path in self.path_input.iterdir() if path.is_file()),
-            key=lambda path: path.name,
-        )
-        if len(files) != INPUT_IMAGE_COUNT:
-            raise TypeError(
-                f"В папке {self.path_input} должно быть ровно {INPUT_IMAGE_COUNT} файла; "
-                f"найдено: {len(files)}."
-            )
-
-        images = []
-        for path in files:
-            try:
-                with Image.open(path) as image:
-                    if image.format != IMAGE_FORMAT:
-                        raise ValueError(f"Файл {path} должен быть в формате PNG.")
-                    if image.size != IMAGE_SHAPE:
-                        raise ValueError(f"Изображение {path} должно иметь размер 128×128.")
-                    if image.mode != IMAGE_MODE:
-                        raise ValueError(
-                            f"Изображение {path} должно быть 8-битным одноканальным "
-                            f"grayscale (режим L); получен режим {image.mode}."
-                        )
-                    images.append(np.array(image, dtype=np.uint8))
-            except OSError as error:
-                raise ValueError(f"Не удалось прочитать изображение {path}.") from error
-
-        self.images = images
+        self.images = [
+            load_grayscale_png(self.path_input / f"{index}.png")
+            for index in range(1, INPUT_IMAGE_COUNT + 1)
+        ]
 
     def to_numpy(self) -> NDArray[np.uint8]:
         """Вернуть новый массив (4, 128, 128), uint8, диапазон [0, 255]."""
@@ -71,7 +98,7 @@ class InputPictures:
 
         Форма (4, 128, 128) и исходные значения self.images сохраняются.
         """
-        return self.to_numpy().astype(np.float32) / np.float32(MAX_PIXEL_VALUE)
+        return normalize_pixels(self.to_numpy())
 
 
 class OutputPictures:
@@ -117,16 +144,11 @@ class OutputPictures:
         Папка создаётся вместе с родительскими каталогами при необходимости.
         Имена 1.png–4.png соответствуют 24,1 / 25,3 / 26,5 / 27,7 мм.
         Возвращает пути файлов в том же порядке.
-        FileExistsError: папка занята файлом или одно из имён уже существует.
-        Остальные ошибки записи передаются вызывающему коду как OSError.
+        Существующие изображения с теми же именами перезаписываются.
         """
         pixels = self.to_uint8()
         paths = [self.path_output / f"{index}.png" for index in range(1, INPUT_IMAGE_COUNT + 1)]
-        for path in paths:
-            if path.exists():
-                raise FileExistsError(f"Файл уже существует: {path}")
         self.path_output.mkdir(parents=True, exist_ok=True)
         for image_pixels, path in zip(pixels, paths):
-            with path.open("xb") as stream:
-                Image.fromarray(image_pixels).save(stream, format=IMAGE_FORMAT)
+            Image.fromarray(image_pixels).save(path, format=IMAGE_FORMAT)
         return paths

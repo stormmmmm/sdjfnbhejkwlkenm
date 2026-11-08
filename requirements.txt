@@ -1,2 +1,4 @@
+keras-nightly==3.16.0.dev2026110603
 numpy==2.5.4
 Pillow==13.0.0
+tensorflow==2.22.0rc0
